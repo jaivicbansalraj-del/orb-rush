@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orb Rush</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f1ecfa;
+    --ink: #2a1b45;
+    --muted: #6d5f8a;
+    --panel: #ffffff;
+    --line: #d9d0ec;
+    --accent: #7c3aed;
+    --accent-ink: #ffffff;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17102a;
+      --ink: #f0eafc;
+      --muted: #a89cc6;
+      --panel: #221840;
+      --line: #3a2c63;
+      --accent: #ffd166;
+      --accent-ink: #2a1b45;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17102a;
+    --ink: #f0eafc;
+    --muted: #a89cc6;
+    --panel: #221840;
+    --line: #3a2c63;
+    --accent: #ffd166;
+    --accent-ink: #2a1b45;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  main {
+    width: 100%;
+    max-width: 880px;
+    padding: 20px 16px 28px;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 24px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .hud {
+    display: flex;
+    gap: 20px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    flex-wrap: wrap;
+  }
+  .hud span { color: var(--muted); margin-right: 6px; font-weight: 500; }
+  .hud b { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #1f1535;
+    border: 2px solid var(--line);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 14px;
+    padding: 20px;
+    background: rgba(23, 16, 42, 0.78);
+    color: #f0eafc;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 {
+    margin: 0;
+    font-size: clamp(1.6rem, 5vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .overlay p {
+    margin: 0;
+    max-width: 44ch;
+    line-height: 1.45;
+    color: #cfc4ea;
+    font-size: clamp(0.9rem, 2.4vw, 1.05rem);
+  }
+  button {
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.05rem;
+    padding: 12px 28px;
+    border-radius: 999px;
+    border: 0;
+    cursor: pointer;
+    background: #ffd166;
+    color: #2a1b45;
+  }
+  button:hover { filter: brightness(1.06); }
+  button:focus-visible, .toggle:focus-visible { outline: 3px solid #5eead4; outline-offset: 3px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 0.95rem; color: #cfc4ea; }
+  .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; }
+  .dot { border-radius: 50%; }
+  .diamond { transform: rotate(45deg) scale(0.85); }
+  .foot {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Orb Rush</h1>
+    <div class="hud" aria-live="off">
+      <div><span>Score</span><b id="hudScore">0</b></div>
+      <div><span>Level</span><b id="hudLevel">1</b></div>
+      <div><span>Lives</span><b id="hudLives" aria-label="3 lives">●●●</b></div>
+      <div><span>Best</span><b id="hudBest">0</b></div>
+    </div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="Orb Rush game area"></canvas>
+
+    <div class="overlay" id="menu">
+      <h2>Collect orbs. Dodge everything else.</h2>
+      <div class="legend">
+        <div><i class="dot" style="background:#5eead4"></i>Orb: +10</div>
+        <div><i class="diamond" style="background:#ff6b6b"></i>Chaser</div>
+        <div><i class="dot" style="background:#c084fc"></i>Bouncer</div>
+      </div>
+      <p>Move with WASD or the arrow keys. On a touch screen, drag anywhere. Every 5 orbs the arena gets harder. You have 3 lives.</p>
+      <button id="startBtn" type="button">Start game</button>
+    </div>
+
+    <div class="overlay" id="paused" hidden>
+      <h2>Paused</h2>
+      <button id="resumeBtn" type="button">Resume</button>
+    </div>
+
+    <div class="overlay" id="over" hidden>
+      <h2 id="overTitle">Game over</h2>
+      <p id="overText"></p>
+      <button id="againBtn" type="button">Play again</button>
+    </div>
+  </div>
+
+  <p class="foot">Keys: WASD / arrows to move, P or Esc to pause, Enter to start or restart.</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Setup ----------
+  var W = 800, H = 600;
+  var canvas = document.getElementById("c");
+  var ctx = canvas.getContext("2d");
+  var scale = 1;
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var el = {
+    score: document.getElementById("hudScore"),
+    level: document.getElementById("hudLevel"),
+    lives: document.getElementById("hudLives"),
+    best: document.getElementById("hudBest"),
+    menu: document.getElementById("menu"),
+    paused: document.getElementById("paused"),
+    over: document.getElementById("over"),
+    overTitle: document.getElementById("overTitle"),
+    overText: document.getElementById("overText"),
+    start: document.getElementById("startBtn"),
+    resume: document.getElementById("resumeBtn"),
+    again: document.getElementById("againBtn")
+  };
+
+  var COLORS = {
+    bg: "#1f1535",
+    grid: "#2c2150",
+    wall: "#4a3a80",
+    player: "#ffd166",
+    orb: "#5eead4",
+    chaser: "#ff6b6b",
+    bouncer: "#c084fc"
+  };
+
+  function resize() {
+    var r = canvas.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(r.width * dpr));
+    canvas.height = Math.max(1, Math.round(r.height * dpr));
+    scale = canvas.width / W;
+  }
+  window.addEventListener("resize", resize);
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  // ---------- High score (browser storage, guarded) ----------
+  var best = 0;
+  try { best = parseInt(localStorage.getItem("orbrush-best") || "0", 10) || 0; } catch (e) { best = 0; }
+  el.best.textContent = best;
+  function saveBest() { try { localStorage.setItem("orbrush-best", String(best)); } catch (e) {} }
+
+  // ---------- Sound (tiny synth beeps) ----------
+  var actx = null;
+  function initAudio() {
+    if (actx) return;
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+  }
+  function beep(freq, dur, type, vol, slideTo) {
+    if (!actx) return;
+    try {
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || "sine";
+      o.frequency.setValueAtTime(freq, actx.currentTime);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, actx.currentTime + dur);
+      g.gain.setValueAtTime(vol || 0.08, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + dur);
+    } catch (e) {}
+  }
+
+  // ---------- State ----------
+  var state = "menu"; // menu | play | paused | over
+  var player, orbs, enemies, particles, score, collected, level, lives, spawnTimer, shake, time;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+
+  function reset() {
+    player = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: 12, inv: 0 };
+    orbs = []; enemies = []; particles = [];
+    score = 0; collected = 0; level = 1; lives = 3;
+    spawnTimer = 2; shake = 0; time = 0;
+    for (var i = 0; i < 3; i++) spawnOrb();
+    updateHud();
+  }
+
+  function spawnOrb() {
+    var o, tries = 0;
+    do {
+      o = { x: rand(40, W - 40), y: rand(40, H - 40), r: 9, phase: rand(0, 6.28) };
+      tries++;
+    } while (tries < 20 && dist(o, player) < 90);
+    orbs.push(o);
+  }
+
+  function spawnEnemy() {
+    var maxEnemies = 3 + level;
+    if (enemies.length >= maxEnemies) return;
+    var type = (level >= 3 && Math.random() < 0.45) ? "bouncer" : "chaser";
+    var e, tries = 0;
+    do {
+      var edge = Math.floor(Math.random() * 4);
+      var x = edge === 0 ? 10 : edge === 1 ? W - 10 : rand(10, W - 10);
+      var y = edge === 2 ? 10 : edge === 3 ? H - 10 : rand(10, H - 10);
+      e = { type: type, x: x, y: y, r: type === "chaser" ? 11 : 13, vx: 0, vy: 0 };
+      tries++;
+    } while (tries < 20 && dist(e, player) < 220);
+    if (type === "bouncer") {
+      var a = rand(0, 6.28), sp = 120 + level * 10;
+      e.vx = Math.cos(a) * sp; e.vy = Math.sin(a) * sp;
+    }
+    enemies.push(e);
+  }
+
+  function burst(x, y, color, n, speed) {
+    for (var i = 0; i < n; i++) {
+      var a = rand(0, 6.28), s = rand(speed * 0.3, speed);
+      particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), max: 0.7, color: color, size: rand(2, 4) });
+    }
+  }
+
+  function updateHud() {
+    el.score.textContent = score;
+    el.level.textContent = level;
+    var s = "";
+    for (var i = 0; i < 3; i++) s += i < lives ? "●" : "○";
+    el.lives.textContent = s;
+    el.lives.setAttribute("aria-label", lives + (lives === 1 ? " life" : " lives"));
+    el.best.textContent = best;
+  }
+
+  // ---------- Input ----------
+  var keys = {};
+  var joy = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
+
+  window.addEventListener("keydown", function (e) {
+    var k = e.key.toLowerCase();
+    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].indexOf(k) !== -1 && state === "play") e.preventDefault();
+    keys[k] = true;
+    if (k === "p" || k === "escape") {
+      if (state === "play") pauseGame(); else if (state === "paused") resumeGame();
+    }
+    if (k === "enter") {
+      if (state === "menu" || state === "over") startGame();
+      else if (state === "paused") resumeGame();
+    }
+  });
+  window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener("blur", function () { keys = {}; if (state === "play") pauseGame(); });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && state === "play") pauseGame(); });
+
+  canvas.addEventListener("pointerdown", function (e) {
+    if (state !== "play") return;
+    joy.active = true; joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = 0; joy.dy = 0;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!joy.active || e.pointerId !== joy.id) return;
+    var dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
+    var len = Math.sqrt(dx * dx + dy * dy), max = 50;
+    if (len > max) { joy.ox += (dx / len) * (len - max); joy.oy += (dy / len) * (len - max); dx = (dx / len) * max; dy = (dy / len) * max; }
+    joy.dx = dx / max; joy.dy = dy / max;
+  });
+  function endJoy(e) { if (joy.active && e.pointerId === joy.id) { joy.active = false; joy.dx = 0; joy.dy = 0; } }
+  canvas.addEventListener("pointerup", endJoy);
+  canvas.addEventListener("pointercancel", endJoy);
+
+  function readInput() {
+    var x = 0, y = 0;
+    if (keys["a"] || keys["arrowleft"]) x -= 1;
+    if (keys["d"] || keys["arrowright"]) x += 1;
+    if (keys["w"] || keys["arrowup"]) y -= 1;
+    if (keys["s"] || keys["arrowdown"]) y += 1;
+    if (x !== 0 || y !== 0) {
+      var l = Math.sqrt(x * x + y * y); x /= l; y /= l;
+    } else if (joy.active) {
+      x = joy.dx; y = joy.dy;
+    }
+    return { x: x, y: y };
+  }
+
+  // ---------- Game flow ----------
+  function startGame() {
+    initAudio();
+    reset();
+    el.menu.hidden = true; el.over.hidden = true; el.paused.hidden = true;
+    state = "play";
+    beep(440, 0.12, "triangle", 0.07, 660);
+  }
+  function pauseGame() { state = "paused"; el.paused.hidden = false; el.resume.focus(); }
+  function resumeGame() { state = "play"; el.paused.hidden = true; last = performance.now(); }
+  function endGame() {
+    state = "over";
+    var newBest = score > best;
+    if (newBest) { best = score; saveBest(); }
+    updateHud();
+    el.overTitle.textContent = newBest && score > 0 ? "New best!" : "Game over";
+    el.overText.textContent = "You scored " + score + " and reached level " + level + ". Best: " + best + ".";
+    el.over.hidden = false;
+    el.again.focus();
+    beep(300, 0.5, "sawtooth", 0.07, 80);
+  }
+
+  el.start.addEventListener("click", startGame);
+  el.again.addEventListener("click", startGame);
+  el.resume.addEventListener("click", resumeGame);
+
+  // ---------- Update ----------
+  function update(dt) {
+    time += dt;
+    var inp = readInput();
+    var accel = 1800, maxSp = 270, drag = 9;
+    player.vx += inp.x * accel * dt;
+    player.vy += inp.y * accel * dt;
+    player.vx -= player.vx * Math.min(1, drag * dt);
+    player.vy -= player.vy * Math.min(1, drag * dt);
+    var sp = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+    if (sp > maxSp) { player.vx = player.vx / sp * maxSp; player.vy = player.vy / sp * maxSp; }
+    player.x += player.vx * dt; player.y += player.vy * dt;
+    if (player.x < player.r) { player.x = player.r; player.vx = 0; }
+    if (player.x > W - player.r) { player.x = W - player.r; player.vx = 0; }
+    if (player.y < player.r) { player.y = player.r; player.vy = 0; }
+    if (player.y > H - player.r) { player.y = H - player.r; player.vy = 0; }
+    if (player.inv > 0) player.inv -= dt;
+
+    // orbs
+    for (var i = orbs.length - 1; i >= 0; i--) {
+      var o = orbs[i];
+      if (dist(o, player) < o.r + player.r) {
+        orbs.splice(i, 1);
+        score += 10; collected++;
+        burst(o.x, o.y, COLORS.orb, 14, 160);
+        beep(660 + Math.min(collected, 20) * 12, 0.1, "sine", 0.07);
+        var newLevel = 1 + Math.floor(collected / 5);
+        if (newLevel > level) { level = newLevel; beep(880, 0.25, "triangle", 0.07, 1320); }
+        spawnOrb();
+        updateHud();
+      }
+    }
+
+    // enemy spawning
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnEnemy();
+      spawnTimer = Math.max(1.1, 3.6 - level * 0.35);
+    }
+
+    // enemies
+    for (var j = enemies.length - 1; j >= 0; j--) {
+      var e = enemies[j];
+      if (e.type === "chaser") {
+        var dx = player.x - e.x, dy = player.y - e.y, l = Math.sqrt(dx * dx + dy * dy) || 1;
+        var s = 75 + level * 9;
+        e.vx += (dx / l * s - e.vx) * Math.min(1, 3 * dt);
+        e.vy += (dy / l * s - e.vy) * Math.min(1, 3 * dt);
+      }
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      if (e.type === "bouncer") {
+        if (e.x < e.r) { e.x = e.r; e.vx = Math.abs(e.vx); }
+        if (e.x > W - e.r) { e.x = W - e.r; e.vx = -Math.abs(e.vx); }
+        if (e.y < e.r) { e.y = e.r; e.vy = Math.abs(e.vy); }
+        if (e.y > H - e.r) { e.y = H - e.r; e.vy = -Math.abs(e.vy); }
+      }
+      if (player.inv <= 0 && dist(e, player) < e.r + player.r - 2) {
+        lives--;
+        player.inv = 1.3;
+        shake = reduceMotion ? 0 : 0.35;
+        burst(player.x, player.y, COLORS.player, 22, 240);
+        burst(e.x, e.y, e.type === "chaser" ? COLORS.chaser : COLORS.bouncer, 12, 180);
+        enemies.splice(j, 1);
+        beep(180, 0.25, "square", 0.07, 70);
+        updateHud();
+        if (lives <= 0) { endGame(); return; }
+      }
+    }
+
+    // particles
+    for (var k = particles.length - 1; k >= 0; k--) {
+      var p = particles[k];
+      p.life -= dt;
+      if (p.life <= 0) { particles.splice(k, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 0.96; p.vy *= 0.96;
+    }
+    if (shake > 0) shake = Math.max(0, shake - dt);
+  }
+
+  // ---------- Draw ----------
+  function drawArena() {
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var x = 40; x < W; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (var y = 40; y < H; y += 40) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.wall;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(3, 3, W - 6, H - 6);
+  }
+
+  function draw() {
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.save();
+    if (shake > 0) ctx.translate(rand(-1, 1) * shake * 16, rand(-1, 1) * shake * 16);
+    drawArena();
+
+    if (state === "menu") { ctx.restore(); return; }
+
+    // orbs
+    for (var i = 0; i < orbs.length; i++) {
+      var o = orbs[i];
+      var pulse = 1 + Math.sin(time * 5 + o.phase) * 0.15;
+      ctx.fillStyle = "rgba(94,234,212,0.18)";
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r * 2.1 * pulse, 0, 6.283); ctx.fill();
+      ctx.fillStyle = COLORS.orb;
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r * pulse, 0, 6.283); ctx.fill();
+    }
+
+    // enemies
+    for (var j = 0; j < enemies.length; j++) {
+      var e = enemies[j];
+      if (e.type === "chaser") {
+        ctx.fillStyle = COLORS.chaser;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y - e.r - 3); ctx.lineTo(e.x + e.r + 3, e.y);
+        ctx.lineTo(e.x, e.y + e.r + 3); ctx.lineTo(e.x - e.r - 3, e.y);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillStyle = COLORS.bouncer;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 6.283); ctx.fill();
+        ctx.fillStyle = COLORS.bg;
+        ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.45, 0, 6.283); ctx.fill();
+      }
+    }
+
+    // particles
+    for (var k = 0; k < particles.length; k++) {
+      var p = particles[k];
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+
+    // player (flicker while invulnerable)
+    if (state !== "over" && !(player.inv > 0 && Math.floor(player.inv * 14) % 2 === 0)) {
+      ctx.fillStyle = "rgba(255,209,102,0.2)";
+      ctx.beginPath(); ctx.arc(player.x, player.y, player.r * 1.9, 0, 6.283); ctx.fill();
+      ctx.fillStyle = COLORS.player;
+      ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+
+    // touch joystick
+    if (joy.active && state === "play") {
+      var rect = canvas.getBoundingClientRect();
+      var f = W / rect.width;
+      var cx = (joy.ox - rect.left) * f, cy = (joy.oy - rect.top) * f;
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, 50 * f, 0, 6.283); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath(); ctx.arc(cx + joy.dx * 50 * f, cy + joy.dy * 50 * f, 16 * f, 0, 6.283); ctx.fill();
+    }
+  }
+
+  // ---------- Loop ----------
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    if (state === "play") update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
