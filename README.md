@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/33114779/README.md)
+
 # Orb Rush
 
 A fast 2D arcade survival game that runs in your browser. Collect orbs, dodge enemies, and beat your high score.
